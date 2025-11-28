@@ -6,6 +6,7 @@ export const favoritesService = {
   // Add item to favorites
   async addToFavorites(userId: string, item: Omit<FavoriteItem, "addedAt">) {
     try {
+      //
       const favRef = collection(db, "users", userId, "favorites")
       const existingItems = await getDocs(query(favRef))
 
