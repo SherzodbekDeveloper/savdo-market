@@ -1,33 +1,19 @@
 "use client"
 import { useAuth } from "@/contexts/auth-context"
+import { useProducts } from "@/hooks/useProduct"
+import { formatPrice } from "@/lib/utils"
 import { Heart, Menu, Search, ShoppingCart, User, X } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 export function Navbar() {
 	const { user } = useAuth()
-	const [products, setProducts] = useState<any[]>([])
+	const { data: products, loading } = useProducts()
 	const [searchTerm, setSearchTerm] = useState("")
 	const [isSearchOpen, setIsSearchOpen] = useState(false)
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-	const [loading, setLoading] = useState(true)
 
-	useEffect(() => {
-		async function fetchProducts() {
-			try {
-				const res = await fetch("https://fakestoreapi.com/products")
-				const data = await res.json()
-				setProducts(data)
-			} catch (error) {
-				console.error("Error fetching products:", error)
-			} finally {
-				setLoading(false)
-			}
-		}
-		fetchProducts()
-	}, [])
-
-	const filteredProducts = products
+	const filteredProducts = (products || [])
 		.filter((product) => product.title.toLowerCase().includes(searchTerm.toLowerCase()))
 		.slice(0, 8)
 
@@ -58,15 +44,15 @@ export function Navbar() {
 									<div className="p-3 space-y-2">
 										{filteredProducts.map((product) => (
 											<Link
-												key={product.id}
-												href={`/product/${product.id}`}
+												key={product.docId ?? product.id}
+												href={`/product/${product.docId ?? product.id}`}
 												className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors group cursor-pointer"
 											>
 												<div className="flex-1 min-w-0">
 													<p className="text-sm font-medium text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
 														{product.title}
 													</p>
-													<p className="text-xs text-gray-600 mt-0.5">${product.price?.toFixed(2)}</p>
+													<p className="text-xs text-gray-600 mt-0.5">{formatPrice(product.price)}</p>
 												</div>
 											</Link>
 										))}

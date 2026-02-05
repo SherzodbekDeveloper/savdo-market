@@ -1,20 +1,24 @@
 import { db } from "@/lib/firebase"
-import { collection, addDoc, deleteDoc, updateDoc, getDocs, query, onSnapshot } from "firebase/firestore"
 import type { CartItem } from "@/types"
+import { addDoc, collection, deleteDoc, getDocs, onSnapshot, query, updateDoc } from "firebase/firestore"
 
 export const cartService = {
-  // Add item to cart
-  async addToCart(userId: string, item: Omit<CartItem, "addedAt">) {
+  // item may include optional variantKey to distinguish variants
+  async addToCart(userId: string, item: Omit<CartItem, "addedAt" | "id">) {
     try {
       const cartRef = collection(db, "users", userId, "cart")
       const existingItems = await getDocs(query(cartRef))
 
       let found = false
-      for (const doc of existingItems.docs) {
-        if (doc.data().productId === item.productId) {
-          // Update quantity if product already in cart
-          await updateDoc(doc.ref, {
-            quantity: doc.data().quantity + item.quantity,
+      for (const d of existingItems.docs) {
+        const data = d.data()
+        const sameProduct = data.productId === item.productId
+        const sameVariant = (data.variantKey || null) === (item.variantKey || null)
+        if (sameProduct && sameVariant) {
+          await updateDoc(d.ref, {
+            quantity: (data.quantity || 0) + item.quantity,
+            price: item.price,
+            title: item.title,
           })
           found = true
           break
@@ -33,16 +37,26 @@ export const cartService = {
     }
   },
 
-  // Remove item from cart
-  async removeFromCart(userId: string, productId: number) {
+  // identifier can be cart doc id (string) or productId (number). If number is passed, variantKey can be provided to disambiguate
+  async removeFromCart(userId: string, identifier: string | number, variantKey?: string) {
     try {
       const cartRef = collection(db, "users", userId, "cart")
       const items = await getDocs(query(cartRef))
 
-      for (const doc of items.docs) {
-        if (doc.data().productId === productId) {
-          await deleteDoc(doc.ref)
-          break
+      for (const d of items.docs) {
+        const data = d.data()
+        if (typeof identifier === "string") {
+          if (d.id === identifier) {
+            await deleteDoc(d.ref)
+            break
+          }
+        } else {
+          const sameProduct = data.productId === identifier
+          const sameVariant = variantKey ? (data.variantKey || null) === variantKey : true
+          if (sameProduct && sameVariant) {
+            await deleteDoc(d.ref)
+            break
+          }
         }
       }
     } catch (error) {
@@ -51,20 +65,33 @@ export const cartService = {
     }
   },
 
-  // Update cart item quantity
-  async updateCartQuantity(userId: string, productId: number, quantity: number) {
+  async updateCartQuantity(userId: string, identifier: string | number, quantity: number, variantKey?: string) {
     try {
       const cartRef = collection(db, "users", userId, "cart")
       const items = await getDocs(query(cartRef))
 
-      for (const doc of items.docs) {
-        if (doc.data().productId === productId) {
-          if (quantity <= 0) {
-            await deleteDoc(doc.ref)
-          } else {
-            await updateDoc(doc.ref, { quantity })
+      for (const d of items.docs) {
+        const data = d.data()
+        if (typeof identifier === "string") {
+          if (d.id === identifier) {
+            if (quantity <= 0) {
+              await deleteDoc(d.ref)
+            } else {
+              await updateDoc(d.ref, { quantity })
+            }
+            break
           }
-          break
+        } else {
+          const sameProduct = data.productId === identifier
+          const sameVariant = variantKey ? (data.variantKey || null) === variantKey : true
+          if (sameProduct && sameVariant) {
+            if (quantity <= 0) {
+              await deleteDoc(d.ref)
+            } else {
+              await updateDoc(d.ref, { quantity })
+            }
+            break
+          }
         }
       }
     } catch (error) {
@@ -73,19 +100,19 @@ export const cartService = {
     }
   },
 
-  // Get all cart items with real-time updates
   subscribeToCart(userId: string, callback: (items: CartItem[]) => void) {
     try {
       const cartRef = collection(db, "users", userId, "cart")
 
       const unsubscribe = onSnapshot(cartRef, (snapshot) => {
         const items: CartItem[] = []
-        snapshot.forEach((doc) => {
-          const data = doc.data()
+        snapshot.forEach((d) => {
+          const data = d.data()
           if (data.productId) {
-            // Skip metadata doc
             items.push({
+              id: d.id,
               productId: data.productId,
+              variantKey: data.variantKey || undefined,
               quantity: data.quantity,
               addedAt: data.addedAt?.toDate() || new Date(),
               price: data.price,
@@ -104,15 +131,14 @@ export const cartService = {
     }
   },
 
-  // Clear cart
   async clearCart(userId: string) {
     try {
       const cartRef = collection(db, "users", userId, "cart")
       const items = await getDocs(query(cartRef))
 
-      for (const doc of items.docs) {
-        if (doc.id !== "_metadata") {
-          await deleteDoc(doc.ref)
+      for (const d of items.docs) {
+        if (d.id !== "_metadata") {
+          await deleteDoc(d.ref)
         }
       }
     } catch (error) {

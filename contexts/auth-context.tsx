@@ -88,7 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await setDoc(doc(db, "users", firebaseUser.uid, "cart", "_metadata"), {
         createdAt: new Date(),
       })
-      // Bu ham cart bilan bir xil
       await setDoc(doc(db, "users", firebaseUser.uid, "favorites", "_metadata"), {
         createdAt: new Date(),
       })
@@ -138,7 +137,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updatedAt: new Date(),
       })
 
-      // Update local state
       setUser((prev) => (prev ? { ...prev, ...userData, updatedAt: new Date() } : null))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Update failed"

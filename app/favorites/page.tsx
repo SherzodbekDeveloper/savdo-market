@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, Trash2, ShoppingBasketIcon } from "lucide-react"
-import Link from "next/link"
-import { favoritesService } from "@/lib/favorite-service"
 import { cartService } from "@/lib/cart-service"
+import { favoritesService } from "@/lib/favorite-service"
+import { formatPrice } from '@/lib/utils'
 import type { FavoriteItem } from "@/types"
+import { ArrowLeft, ShoppingBasketIcon, Trash2 } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth()
@@ -93,7 +94,7 @@ export default function FavoritesPage() {
 
                   <h3 className="font-semibold line-clamp-2 flex-1">{item.title}</h3>
 
-                  <p className="text-lg font-bold text-blue-600 my-2">${item.price}</p>
+                  <p className="text-lg font-bold text-blue-600 my-2">{formatPrice(item.price)}</p>
 
                   <div className="flex gap-2">
                     <button

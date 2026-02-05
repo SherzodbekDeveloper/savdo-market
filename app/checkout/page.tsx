@@ -2,15 +2,16 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, MapPin, Phone, Mail } from "lucide-react"
-import Link from "next/link"
 import { cartService } from "@/lib/cart-service"
-import type { CartItem } from "@/types"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { formatPrice } from '@/lib/utils'
+import type { CartItem } from "@/types"
+import { addDoc, collection, serverTimestamp } from "firebase/firestore"
+import { ArrowLeft, Mail, MapPin, Phone } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { toast } from 'sonner'
 
 interface ShippingInfo {
@@ -64,10 +65,13 @@ export default function CheckoutPage() {
 				setLoading(false)
 			})
 
-			// Pre-fill user email
+			// Pre-fill user info safely
 			setShippingInfo((prev) => ({
 				...prev,
-				email: user.email || "",
+				firstName: user.firstName || prev.firstName || "",
+				lastName: user.lastName || prev.lastName || "",
+				email: user.email || prev.email || "",
+				phone: user.phone || prev.phone || "",
 			}))
 
 			return () => unsubscribe()
@@ -111,25 +115,48 @@ export default function CheckoutPage() {
 		setProcessing(true)
 
 		try {
+			// sanitize shippingInfo and items to ensure no undefined values (Firestore rejects undefined)
+			const sanitizedShipping: any = {}
+			Object.entries(shippingInfo).forEach(([k, v]) => {
+				sanitizedShipping[k] = v === undefined ? null : v
+			})
+
+			const sanitizedItems = cartItems.map((it) => {
+				const copy: any = { ...it }
+				Object.keys(copy).forEach((k) => {
+					if (copy[k] === undefined) copy[k] = null
+				})
+				return copy
+			})
+
 			const orderData: OrderData = {
 				userId: user.uid,
-				items: cartItems,
-				shippingInfo,
+				items: sanitizedItems,
+				shippingInfo: sanitizedShipping,
 				totalPrice,
 				paymentMethod,
 				status: "pending",
 				createdAt: serverTimestamp(),
 			}
 
-			const orderRef = await addDoc(collection(db, "users", user.uid, "orders"), orderData)
+			const userOrderRef = await addDoc(collection(db, "users", user.uid, "orders"), orderData)
+
+			// Also add a copy to global `orders` collection for admin access
+			await addDoc(collection(db, "orders"), {
+				...orderData,
+				userId: user.uid,
+				userEmail: user.email || null,
+				userName: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+				userOrderId: userOrderRef.id,
+			})
 
 			for (const item of cartItems) {
-				await cartService.removeFromCart(user.uid, item.productId)
+				await cartService.removeFromCart(user.uid, item.id ?? item.productId, item.variantKey)
 			}
 
-			toast.success("Buyurtma muvaffaqiyatli berildi! Buyurtma ID: " + orderRef.id)
+			toast.success("Buyurtma muvaffaqiyatli berildi! Buyurtma ID: " + userOrderRef.id)
 
-			router.push(`/order-confirmation/${orderRef.id}`)
+			router.push(`/order-confirmation/${userOrderRef.id}`)
 		} catch (error) {
 			console.error("Buyurtma berishda xatolik:", error)
 			toast.error("Buyurtma berishda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.")
@@ -154,7 +181,7 @@ export default function CheckoutPage() {
 				<h1 className="text-3xl font-bold mb-8">To‘lov sahifasi</h1>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-					
+
 					<div className="lg:col-span-2 space-y-8">
 						<div className="bg-white rounded-lg shadow p-6">
 							<div className="flex items-center gap-2 mb-4">
@@ -169,7 +196,7 @@ export default function CheckoutPage() {
 										<input
 											type="text"
 											name="firstName"
-											value={shippingInfo.firstName = user.firstName}
+											value={shippingInfo.firstName}
 											onChange={handleShippingChange}
 											className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 											required
@@ -180,7 +207,7 @@ export default function CheckoutPage() {
 										<input
 											type="text"
 											name="lastName"
-											value={shippingInfo.lastName = user.lastName}
+											value={shippingInfo.lastName}
 											onChange={handleShippingChange}
 											className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 											required
@@ -196,7 +223,7 @@ export default function CheckoutPage() {
 										<input
 											type="email"
 											name="email"
-											value={shippingInfo.email = user.email}
+											value={shippingInfo.email}
 											onChange={handleShippingChange}
 											className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 											required
@@ -209,7 +236,7 @@ export default function CheckoutPage() {
 										<input
 											type="tel"
 											name="phone"
-											value={shippingInfo.phone = user.phone}
+											value={shippingInfo.phone}
 											onChange={handleShippingChange}
 											className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 											required
@@ -316,7 +343,7 @@ export default function CheckoutPage() {
 						</div>
 					</div>
 
-				
+
 					<div className="bg-white rounded-lg shadow p-6 h-fit sticky top-24">
 						<h2 className="text-xl font-bold mb-4">Buyurtma qisqacha</h2>
 
@@ -324,7 +351,7 @@ export default function CheckoutPage() {
 							{cartItems.map((item) => (
 								<div key={item.productId} className="flex justify-between text-sm">
 									<span className="text-gray-600">{item.title.substring(0, 30)}...</span>
-									<span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+									<span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
 								</div>
 							))}
 						</div>
@@ -332,7 +359,7 @@ export default function CheckoutPage() {
 						<div className="border-t space-y-2 pt-4 mb-6">
 							<div className="flex justify-between text-sm">
 								<span className="text-gray-600">Jami</span>
-								<span>${totalPrice.toFixed(2)}</span>
+								<span>{formatPrice(totalPrice)}</span>
 							</div>
 							<div className="flex justify-between text-sm">
 								<span className="text-gray-600">Yetkazish</span>
@@ -340,11 +367,11 @@ export default function CheckoutPage() {
 							</div>
 							<div className="flex justify-between text-sm">
 								<span className="text-gray-600">Soliq</span>
-								<span>${(totalPrice * 0.12).toFixed(2)}</span>
+								<span>{formatPrice(totalPrice * 0.12)}</span>
 							</div>
 							<div className="border-t pt-2 flex justify-between font-bold text-lg">
 								<span>Umumiy</span>
-								<span>${(totalPrice + totalPrice * 0.12).toFixed(2)}</span>
+								<span>{formatPrice(totalPrice + totalPrice * 0.12)}</span>
 							</div>
 						</div>
 

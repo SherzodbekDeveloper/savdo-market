@@ -34,7 +34,7 @@ export default function SignupPage() {
     e.preventDefault()
     setError(null)
 
-    // Validation
+    
     if (formData.password !== formData.confirmPassword) {
       setError("Parollar bir xil emas")
       return

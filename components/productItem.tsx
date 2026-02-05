@@ -1,18 +1,18 @@
 "use client"
 
-import { ShoppingBasketIcon, StarIcon, HeartIcon } from "lucide-react"
-import Link from "next/link"
-import CustomImage from "./image"
 import { useAuth } from "@/contexts/auth-context"
 import { cartService } from "@/lib/cart-service"
 import { favoritesService } from "@/lib/favorite-service"
-import { useState, useEffect } from "react"
-import type { Item } from "@/types"
-import { toast } from 'sonner'
+import { formatPrice } from "@/lib/utils"
+import { Heart, ShoppingCart, TrendingUp } from "lucide-react"
 import Image from 'next/image'
+import Link from "next/link"
+import { useEffect, useState } from "react"
+import { toast } from 'sonner'
+import CustomImage from "./image"
 
 type ProductItemProps = {
-  item: Item
+  item: any
 }
 
 export default function ProductItem({ item }: ProductItemProps) {
@@ -50,7 +50,7 @@ export default function ProductItem({ item }: ProductItemProps) {
         quantity: 1,
         price: item.price,
         title: item.title,
-        image: item.image,
+        image: item.imageUrl || item.image || '',
       })
       toast.success("Mahsulot savatchaga qo'shildi!")
     } catch (error) {
@@ -80,7 +80,7 @@ export default function ProductItem({ item }: ProductItemProps) {
           productId: item.id,
           price: item.price,
           title: item.title,
-          image: item.image,
+          image: item.imageUrl || item.image || '',
         })
         setIsFavorited(true)
       }
@@ -94,36 +94,87 @@ export default function ProductItem({ item }: ProductItemProps) {
   }
 
   return (
-    <div className="rounded-2xl hover:shadow-sm group">
-      <Link href={`product/${item.id}`} className="block relative object-center h-80 rounded overflow-hidden"> <CustomImage fill product={item} />
+    <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 transition-all duration-300 hover:shadow-xl hover:border-primary/40 hover:-translate-y-1 flex flex-col">
+      <Link 
+        href={`product/${item.docId ?? item.id}`} 
+        className="relative block w-full aspect-square overflow-hidden bg-gradient-to-br from-secondary to-secondary/50"
+      >
+        <CustomImage 
+          fill 
+          product={item} 
+          className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
+        />
+        {/* Badge */}
+        <div className="absolute top-3 right-3 flex flex-col gap-2">
+          {item.quantity && item.quantity < 10 && (
+            <div className="bg-red-500 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              {item.quantity} left
+            </div>
+          )}
+          <div className="bg-primary text-primary-foreground px-2.5 py-1 rounded-full text-xs font-semibold">
+            Save 15%
+          </div>
+        </div>
       </Link>
-      <div className="mt-4 p-4 pt-1">
-        <p className="mt-1">${item.price}</p>
-        <div className="h-20">
-          <h2 className="text-gray-900 title-font text-lg font-medium line-clamp-2">{item.title}</h2>
+      
+      <div className="p-4 flex-1 flex flex-col">
+        {/* Brand */}
+        {item.brand && (
+          <p className="text-xs font-semibold uppercase text-primary/70 mb-1.5 tracking-wider">
+            {item.brand}
+          </p>
+        )}
+
+        {/* Title */}
+        <h2 className="text-sm font-bold text-foreground line-clamp-2 mb-3 leading-tight group-hover:text-primary transition-colors">
+          {item.title}
+        </h2>
+
+        {/* Key Specs */}
+        {item.specs && (
+          <div className="mb-3 space-y-1 text-xs text-muted-foreground">
+            {item.specs.model && <p className="line-clamp-1">📱 {item.specs.model}</p>}
+            {item.specs.display && <p className="line-clamp-1">🖥️ {item.specs.display}</p>}
+            {item.specs.camera && <p className="line-clamp-1">📸 {item.specs.camera}</p>}
+          </div>
+        )}
+
+        {/* Price Section */}
+        <div className="mb-4 mt-auto">
+          <div className="flex items-baseline gap-2 mb-1">
+            <p className="text-lg font-bold text-primary">
+              {formatPrice(item.price)}
+            </p>
+            {item.variants && item.variants.length > 0 && (
+              <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                +{item.variants.length} variants
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1 text-sm">
-          <Image src="/blueStar.png" alt="star" width={16} height={16} />
-          <span>
-            {item.rating.rate} ({item.rating.count} baholash) </span>
-        </div>
-        <div className="flex gap-2 mt-2">
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
           <button
             onClick={handleAddToCart}
             disabled={isLoading}
-            className="flex-1 button w-full bg-blue-500 text-white border-transparent cursor-pointer flex items-center justify-center gap-1 rounded-xl hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm active:scale-95"
           >
-            <ShoppingBasketIcon className="w-4 h-4" />
-            {isLoading ? "Qo'shilmoqda..." : "Qo'shish"} </button>
+            <ShoppingCart className="w-4 h-4" />
+            <span className="hidden sm:inline">{isLoading ? "Adding..." : "Add"}</span>
+            <span className="sm:hidden">{isLoading ? "..." : "+"}</span>
+          </button>
           <button
             onClick={handleToggleFavorite}
             disabled={isLoading}
-            className={`button px-3 border-2 rounded-xl cursor-pointer flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isFavorited
-              ? "bg-red-500 border-red-500 text-white hover:bg-red-600"
-              : "border-gray-300 text-gray-600 hover:border-red-500 hover:text-red-500"
-              }`}
+            className={`px-3 py-2.5 border-2 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+              isFavorited
+                ? "bg-red-50/80 border-red-400 text-red-600 hover:bg-red-100 hover:border-red-500"
+                : "border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary/5"
+            }`}
           >
-            <HeartIcon className="w-4 h-4" fill={isFavorited ? "currentColor" : "none"} />
+            <Heart className="w-4 h-4" fill={isFavorited ? "currentColor" : "none"} />
           </button>
         </div>
       </div>

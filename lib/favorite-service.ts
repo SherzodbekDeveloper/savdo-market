@@ -3,7 +3,6 @@ import { collection, addDoc, deleteDoc, getDocs, query, onSnapshot } from "fireb
 import type { FavoriteItem } from "@/types"
 
 export const favoritesService = {
-  // Add item to favorites
   async addToFavorites(userId: string, item: Omit<FavoriteItem, "addedAt">) {
     try {
       //
@@ -27,7 +26,7 @@ export const favoritesService = {
     }
   },
 
-  // Remove item from favorites
+
   async removeFromFavorites(userId: string, productId: number) {
     try {
       const favRef = collection(db, "users", userId, "favorites")
@@ -45,7 +44,6 @@ export const favoritesService = {
     }
   },
 
-  // Get all favorites with real-time updates
   subscribeToFavorites(userId: string, callback: (items: FavoriteItem[]) => void) {
     try {
       const favRef = collection(db, "users", userId, "favorites")
@@ -55,7 +53,6 @@ export const favoritesService = {
         snapshot.forEach((doc) => {
           const data = doc.data()
           if (data.productId) {
-            // Skip metadata doc
             items.push({
               productId: data.productId,
               addedAt: data.addedAt?.toDate() || new Date(),

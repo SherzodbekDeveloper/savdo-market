@@ -35,13 +35,13 @@ function CardsSection() {
   }
 
   return (
-    <main  className="min-h-screen max-w-7xl mx-auto px-8 xl:px-0 mt-52">
+    <main className="min-h-screen max-w-7xl mx-auto px-8 xl:px-0 mt-52">
       <section id='takliflar'>
         <div className="flex flex-col space-y-12" >
           <h1 className="text-5xl font-bold text-center">DO‘KONIMIZ TAKLIFLARI</h1>
           <div className="grid md:grid-cols-4 grid-cols-1 sm:grid-cols-2 gap-4">
             {products?.map((item) => (
-              <ProductItem key={item.id} item={item} />
+              <ProductItem key={item.docId ?? item.id} item={item} />
             ))}
           </div>
         </div>

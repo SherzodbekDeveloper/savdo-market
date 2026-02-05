@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { cartService } from "@/lib/cart-service"
+import { formatPrice } from "@/lib/utils"
+import type { CartItem } from "@/types"
 import { ArrowLeft, Trash2 } from "lucide-react"
 import Link from "next/link"
-import { cartService } from "@/lib/cart-service"
-import type { CartItem } from "@/types"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 export default function CartPage() {
   const { user, loading: authLoading } = useAuth()
@@ -30,10 +31,10 @@ export default function CartPage() {
     }
   }, [user, authLoading, router])
 
-  const handleRemove = async (productId: number) => {
+  const handleRemove = async (item: CartItem) => {
     if (!user) return
     try {
-      await cartService.removeFromCart(user.uid, productId)
+      await cartService.removeFromCart(user.uid, item.id ?? item.productId, item.variantKey)
     } catch (error) {
       console.error("Error removing from cart:", error)
     }
@@ -43,10 +44,10 @@ export default function CartPage() {
   }
 
 
-  const handleQuantityChange = async (productId: number, newQuantity: number) => {
+  const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
     if (!user) return
     try {
-      await cartService.updateCartQuantity(user.uid, productId, newQuantity)
+      await cartService.updateCartQuantity(user.uid, item.id ?? item.productId, newQuantity, item.variantKey)
     } catch (error) {
       console.error("Error updating quantity:", error)
     }
@@ -83,7 +84,7 @@ export default function CartPage() {
             <>
               <div className="space-y-4 mb-6">
                 {cartItems.map((item) => (
-                  <div key={item.productId} className="flex gap-4 border rounded-lg p-4">
+                  <div key={item.id ?? `${item.productId}-${item.variantKey ?? ''}`} className="flex gap-4 border rounded-lg p-4">
                     <img
                       src={item.image || "/placeholder.svg"}
                       alt={item.title}
@@ -91,24 +92,24 @@ export default function CartPage() {
                     />
                     <div className="flex-1">
                       <h3 className="font-semibold">{item.title}</h3>
-                      <p className="text-gray-600">${item.price}</p>
+                      <p className="text-gray-600">{formatPrice(item.price)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleQuantityChange(item.productId, Math.max(1, item.quantity - 1))}
+                        onClick={() => handleQuantityChange(item, Math.max(1, item.quantity - 1))}
                         className="px-2 py-1 border rounded"
                       >
                         -
                       </button>
                       <span className="px-4">{item.quantity}</span>
                       <button
-                        onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
+                        onClick={() => handleQuantityChange(item, item.quantity + 1)}
                         className="px-2 py-1 border rounded"
                       >
                         +
                       </button>
                     </div>
-                    <button onClick={() => handleRemove(item.productId)} className="text-red-600 hover:text-red-800">
+                    <button onClick={() => handleRemove(item)} className="text-red-600 hover:text-red-800">
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
@@ -118,9 +119,9 @@ export default function CartPage() {
               <div className="border-t pt-4">
                 <div className="flex justify-between text-lg font-bold mb-4">
                   <span>Jami:</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>{formatPrice(totalPrice)}</span>
                 </div>
-                <button   onClick={handleCheckout} className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
+                <button onClick={handleCheckout} className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
                   To‘lovga o‘tish
                 </button>
               </div>

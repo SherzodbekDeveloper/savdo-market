@@ -1,44 +1,42 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
 import CustomImage from "@/components/image"
-import { ArrowLeft, Heart } from "lucide-react"
-import { useRouter } from "next/navigation"
-import ReactStars from "react-stars"
 import { useAuth } from "@/contexts/auth-context"
+import { useProduct } from "@/hooks/useProduct"
 import { cartService } from "@/lib/cart-service"
 import { favoritesService } from "@/lib/favorite-service"
-import type { Item } from "@/types"
-import { toast } from 'sonner'
+import { formatPrice } from "@/lib/utils"
+import { ArrowLeft, Heart, Share2 } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { toast } from 'sonner' 
 
 export default function ProductDetailedPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const router = useRouter()
-  const [product, setProduct] = useState<Item | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: product, loading, error } = useProduct(id)
   const [addingToCart, setAddingToCart] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [checkingFav, setCheckingFav] = useState(false)
 
-  useEffect(() => {
-    async function fetchProduct() {
-      try {
-        const res = await fetch(`https://fakestoreapi.com/products/${id}`)
-        const data = await res.json()
-        setProduct(data)
-      } catch (error) {
-        console.error("Error fetching product:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const [selectedSize, setSelectedSize] = useState<{ value: string; priceDiff: number } | null>(null)
+  const [selectedColor, setSelectedColor] = useState<{ value: string; priceDiff: number } | null>(null)
 
-    if (id) {
-      fetchProduct()
-    }
-  }, [id])
+  useEffect(() => {
+    if (!product) return
+    const sizes = product.variants?.sizes || []
+    const colors = product.variants?.colors || []
+    setSelectedSize(sizes.length ? sizes[0] : null)
+    setSelectedColor(colors.length ? colors[0] : null)
+  }, [product])
+
+  const finalPriceNumber = useMemo(() => {
+    const base = Number(product?.basePrice || product?.price || 0)
+    const sizeDiff = selectedSize?.priceDiff || 0
+    const colorDiff = selectedColor?.priceDiff || 0
+    return base + sizeDiff + colorDiff
+  }, [product, selectedSize, selectedColor])
 
   useEffect(() => {
     if (user && product) {
@@ -69,17 +67,24 @@ export default function ProductDetailedPage() {
 
     try {
       setAddingToCart(true)
+      const selectedDescParts = []
+      if (selectedSize) selectedDescParts.push(selectedSize.value)
+      if (selectedColor) selectedDescParts.push(selectedColor.value)
+      const titleWithVariants = selectedDescParts.length ? `${product.title} — ${selectedDescParts.join(' / ')}` : product.title
+
+      const variantKey = `size:${selectedSize?.value || ''}|color:${selectedColor?.value || ''}`
       await cartService.addToCart(user.uid, {
         productId: product.id,
+        variantKey,
         quantity: 1,
-        price: product.price,
-        title: product.title,
-        image: product.image,
+        price: finalPriceNumber,
+        title: titleWithVariants,
+        image: product.imageUrl || product.image || '',
       })
-      toast.success("Mahsulot savatchaga qo‘shildi!")
+      toast.success("Mahsulot savatchaga qo'shildi!")
     } catch (error) {
       console.error("Error adding to cart:", error)
-      toast.error("Mahsulotni savatchaga qo‘shib bo‘lmadi")
+      toast.error("Mahsulotni savatchaga qo'shib bo'lmadi")
     } finally {
       setAddingToCart(false)
     }
@@ -104,15 +109,15 @@ export default function ProductDetailedPage() {
           productId: product.id,
           price: product.price,
           title: product.title,
-          image: product.image,
+          image: product.imageUrl || product.image || '',
         })
         setIsFavorited(true)
-        toast.success("Sevimlilarga qo‘shildi!")
+        toast.success("Sevimlilarga qo'shildi!")
       }
     } catch (error) {
       console.error("Error toggling favorite:", error)
       if (!isFavorited) {
-        toast.error("Sevimlilarga qo‘shib bo‘lmadi")
+        toast.error("Sevimlilarga qo'shib bo'lmadi")
       }
     } finally {
       setCheckingFav(false)
@@ -123,83 +128,282 @@ export default function ProductDetailedPage() {
     router.back()
   }
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Yuklanmoqda...</div>
-  if (!product) return <div className="mt-50 text-center">Mahsulot topilmadi, iltimos keyinroq urinib ko‘ring!</div>
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <p className="mt-4 text-muted-foreground">Yuklanmoqda...</p>
+      </div>
+    </div>
+  )
+  if (error) return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="text-center">
+        <p className="text-destructive font-semibold mb-2">Xatolik yuz berdi</p>
+        <p className="text-muted-foreground">{error}</p>
+      </div>
+    </div>
+  )
+  if (!product) return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="text-center">
+        <p className="text-muted-foreground">Mahsulot topilmadi</p>
+        <p className="text-sm text-muted-foreground mt-2">Iltimos keyinroq urinib ko'ring!</p>
+      </div>
+    </div>
+  )
+
+  const colors = product.variants?.colors || []
+  const sizes = product.variants?.sizes || []
 
   return (
-    <section className="text-gray-600 body-font overflow-hidden">
-      <div className="max-w-7xl px-5 py-24 mx-auto">
+    <section className="min-h-screen bg-background">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        {/* Back Button */}
         <button
           onClick={handleBack}
-          className="button px-2 py-1 flex items-center gap-2 hover:bg-gray-100 rounded transition"
+          className="inline-flex items-center gap-2 text-foreground hover:text-primary transition-colors mb-6 font-medium text-sm"
         >
-          <ArrowLeft className="w-4 h-4 text-blue-500" />
-          Orqaga
+          <ArrowLeft className="w-5 h-5" />
+          <span>Orqaga</span>
         </button>
-        <div className="lg:w-4/5 mx-auto flex flex-wrap">
-          <CustomImage product={product} className=" w-full lg:h-auto h-64 rounded" />
-          <div className="lg:w-1/2 w-full lg:pl-10 lg:py-6 mt-6 lg:mt-0">
-            <h2 className="text-sm title-font text-gray-500 tracking-widest">{product.category}</h2>
-            <h1 className="text-gray-900 text-3xl title-font font-medium mb-1">{product.title}</h1>
-            <div className="flex mb-4">
-              <span className="flex items-center">
-                {product.rating?.rate && (
-                  <div className="flex items-center">
-                    <ReactStars count={5} size={24} value={product.rating.rate} edit={false} color2={"#2196F3"} />
-                  </div>
-                )}
 
-                <span className="text-gray-600 ml-2">
-                  {product.rating?.rate} ({product.rating?.count} Sharh)
-                </span>
-              </span>
-              <span className="flex ml-3 pl-3 py-2 border-l-2 border-gray-200 space-x-2s">
-                <a className="text-gray-500 hover:text-blue-500 transition">
-                  {/* icons */}
-                </a>
-              </span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12">
+          {/* Image Section */}
+          <div className="flex flex-col gap-4">
+            <div className="bg-secondary rounded-2xl overflow-hidden border border-border aspect-square lg:sticky lg:top-6">
+              <CustomImage 
+                product={product} 
+                className="w-full h-full object-cover object-center"
+              />
             </div>
-            <p className="leading-relaxed">{product.description}</p>
+          </div>
 
-            <div className="flex mt-6 items-center pb-5 border-b-2 border-gray-100 mb-5">
-              <div className="flex">
-                <span className="mr-3">Rang</span>
-                <button className="border-2 border-gray-300 rounded-full w-6 h-6 focus:outline-none hover:border-blue-500 transition"></button>
-                <button className="border-2 border-gray-300 ml-1 bg-gray-700 rounded-full w-6 h-6 focus:outline-none hover:border-blue-500 transition"></button>
-                <button className="border-2 border-gray-300 ml-1 bg-blue-500 rounded-full w-6 h-6 focus:outline-none hover:border-blue-500 transition"></button>
+          {/* Details Section */}
+          <div className="flex flex-col gap-6">
+            {/* Brand & Category */}
+            {product.brand && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                  {product.brand}
+                </p>
               </div>
-              <div className="flex ml-6 items-center">
-                <span className="mr-3">O‘lcham</span>
-                <div className="relative">
-                  <select className="rounded border appearance-none border-gray-300 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-base pl-3 pr-10">
-                    <option>Kichik (SM)</option>
-                    <option>O‘rta (M)</option>
-                    <option>Katta (L)</option>
-                    <option>Juda katta (XL)</option>
-                  </select>
+            )}
+
+            {/* Title */}
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight mb-3">
+                {product.title}
+              </h1>
+            </div>
+            {/* Description */}
+            {product.desc && (
+              <p className="text-foreground leading-relaxed text-sm sm:text-base">
+                {product.desc}
+              </p>
+            )}
+
+            {/* Specs Section */}
+            {product.specs && Object.keys(product.specs).length > 0 && (
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-5 border border-primary/20">
+                <h3 className="font-bold text-foreground mb-4 text-sm uppercase tracking-wider">Technical Specifications</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {product.specs.model && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Model</p>
+                      <p className="font-semibold text-foreground">{product.specs.model}</p>
+                    </div>
+                  )}
+                  {product.specs.display && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Display</p>
+                      <p className="font-semibold text-foreground">{product.specs.display}</p>
+                    </div>
+                  )}
+                  {product.specs.processor && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Processor</p>
+                      <p className="font-semibold text-foreground">{product.specs.processor}</p>
+                    </div>
+                  )}
+                  {product.specs.camera && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Camera</p>
+                      <p className="font-semibold text-foreground">{product.specs.camera}</p>
+                    </div>
+                  )}
+                  {product.specs.battery && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Battery</p>
+                      <p className="font-semibold text-foreground">{product.specs.battery}</p>
+                    </div>
+                  )}
+                  {product.specs.warranty && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Warranty</p>
+                      <p className="font-semibold text-foreground">{product.specs.warranty}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
+
+            {/* Extra Information */}
+            {product.extra && (
+              <div className="bg-secondary rounded-xl p-4 border border-border">
+                <h3 className="font-semibold text-foreground mb-3 text-sm">Qo'shimcha ma'lumot</h3>
+                <div className="space-y-2">
+                  {product.extra.material && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Material:</span>
+                      <span className="font-medium text-foreground">{product.extra.material}</span>
+                    </div>
+                  )}
+                  {product.extra.Qalinligi && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Qalinligi:</span>
+                      <span className="font-medium text-foreground">{product.extra.Qalinligi}</span>
+                    </div>
+                  )}
+                  {Object.entries(product.extra).map(([key, value]) => {
+                    if (key !== 'material' && key !== 'Qalinligi' && typeof value === 'string') {
+                      return (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground capitalize">{key}:</span>
+                          <span className="font-medium text-foreground">{value}</span>
+                        </div>
+                      )
+                    }
+                    return null
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Variants */}
+            <div className="space-y-6">
+              {/* Colors */}
+              {colors.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-foreground mb-3">
+                    Rang
+                    {selectedColor && selectedColor.priceDiff > 0 && (
+                      <span className="text-primary ml-2">
+                        +{formatPrice(selectedColor.priceDiff)}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {colors.map((c) => (
+                      <button
+                        key={c.value}
+                        onClick={() => setSelectedColor(c)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all border-2 ${
+                          selectedColor?.value === c.value
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border text-foreground hover:border-primary/50 hover:bg-secondary'
+                        }`}
+                      >
+                        {c.value}
+                        {c.priceDiff > 0 && (
+                          <span className="text-xs ml-1 opacity-75">
+                            +{formatPrice(c.priceDiff)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sizes */}
+              {sizes.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-foreground mb-3">
+                    O'lcham
+                    {selectedSize && selectedSize.priceDiff > 0 && (
+                      <span className="text-primary ml-2">
+                        +{formatPrice(selectedSize.priceDiff)}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((s) => (
+                      <button
+                        key={s.value}
+                        onClick={() => setSelectedSize(s)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all border-2 ${
+                          selectedSize?.value === s.value
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border text-foreground hover:border-primary/50 hover:bg-secondary'
+                        }`}
+                      >
+                        {s.value}
+                        {s.priceDiff > 0 && (
+                          <span className="text-xs ml-1 opacity-75">
+                            +{formatPrice(s.priceDiff)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex">
-              <span className="title-font font-medium text-2xl text-gray-900">${product.price}</span>
-              <button
-                onClick={handleAddToCart}
-                disabled={addingToCart}
-                className="flex ml-auto text-white bg-blue-500 border-0 py-2 px-6 focus:outline-none hover:bg-blue-600 rounded disabled:bg-gray-400 transition"
-              >
-                {addingToCart ? "Qo‘shilmoqda..." : "Savatchaga qo‘shish"}
-              </button>
+            {/* Price & Actions */}
+            <div className="space-y-5 pt-6 border-t border-border">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                  Price
+                </p>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-2xl sm:text-3xl font-black text-primary">
+                    {formatPrice(finalPriceNumber)}
+                  </span>
+                  {finalPriceNumber !== (product.basePrice || product.price) && (
+                    <span className="text-sm text-muted-foreground line-through">
+                      {formatPrice(Number(product.basePrice || product.price))}
+                    </span>
+                  )}
+                </div>
+                {product.quantity && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {product.quantity} units in stock
+                  </p>
+                )}
+              </div>
 
-              <button
-                onClick={handleToggleFavorite}
-                disabled={checkingFav}
-                className={`rounded-full w-10 h-10 p-0 border-0 inline-flex items-center justify-center ml-4 transition ${
-                  isFavorited ? "bg-red-200 text-red-600" : "bg-gray-200 text-gray-500 hover:bg-gray-300"
-                } disabled:opacity-50`}
-              >
-                <Heart className="w-5 h-5" fill={isFavorited ? "currentColor" : "none"} />
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={addingToCart}
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base shadow-lg hover:shadow-xl active:scale-95"
+                >
+                  {addingToCart ? "Qo'shilyapti..." : "Savatchaga qo'shish"}
+                </button>
+
+                <button
+                  onClick={handleToggleFavorite}
+                  disabled={checkingFav}
+                  className={`px-5 py-3.5 rounded-xl font-bold transition-all duration-200 border-2 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isFavorited
+                      ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-500 shadow-md"
+                      : "border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary/5"
+                  }`}
+                >
+                  <Heart 
+                    className="w-5 h-5" 
+                    fill={isFavorited ? "currentColor" : "none"}
+                  />
+                </button>
+
+                <button
+                  className="px-5 py-3.5 rounded-xl font-bold transition-all duration-200 border-2 border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary/5 flex items-center justify-center"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

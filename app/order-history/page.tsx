@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { db } from "@/lib/firebase"
+import { formatPrice } from "@/lib/utils"
+import type { Order } from "@/types"
+import { collection, getDocs, query } from "firebase/firestore"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { collection, getDocs, query } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import type { Order } from "@/types"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 export default function OrderHistoryPage() {
   const { user, loading: authLoading } = useAuth()
@@ -85,7 +86,7 @@ export default function OrderHistoryPage() {
             <div className="space-y-4">
               {orders.map((order) => (
                 <Link key={order.orderId} href={`order-confirmation/${order.orderId}`}>
-                  <div  className="border rounded-lg p-4 hover:shadow-md transition">
+                  <div className="border rounded-lg p-4 hover:shadow-md transition">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-semibold">Buyurtma {order.orderId}</p>
@@ -109,7 +110,7 @@ export default function OrderHistoryPage() {
 
                     <div className="mt-3 space-y-1 text-sm">
                       <p>Mahsulotlar soni: {order.items.length}</p>
-                      <p className="font-semibold">Jami: ${order.totalPrice.toFixed(2)}</p>
+                      <p className="font-semibold">Jami: {formatPrice(order.totalPrice)}</p>
                       {order.shippingAddress && (
                         <p className="text-gray-600">Manzil: {order.shippingAddress}</p>
                       )}

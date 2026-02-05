@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { use } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { CheckCircle, Package, Truck, Home } from "lucide-react"
 import { db } from "@/lib/firebase"
+import { formatPrice } from "@/lib/utils"
 import { doc, getDoc } from "firebase/firestore"
+import { CheckCircle, Home, Package, Truck } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { use, useEffect, useState } from "react"
 
 interface OrderItem {
   title: string
@@ -143,14 +143,14 @@ export default function OrderConfirmationPage({ params }: { params: Promise<{ id
                 <span>
                   {item.title.substring(0, 40)}... x{item.quantity}
                 </span>
-                <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                <span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
               </div>
             ))}
           </div>
           <div className="border-t pt-4 space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Jami</span>
-              <span className="font-bold">${order.totalPrice.toFixed(2)}</span>
+              <span className="font-bold">{formatPrice(order.totalPrice)}</span>
             </div>
           </div>
         </div>
